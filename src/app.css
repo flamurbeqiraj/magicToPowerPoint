@@ -37,7 +37,7 @@
 .accent-control input{width:36px;height:32px;padding:2px;border:1px solid #d6dbd4;border-radius:6px;background:#fff;cursor:pointer}
 .provider-picker{min-width:0;margin:0;padding:0;border:0}
 .provider-picker legend{margin-bottom:11px}
-.provider-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.provider-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .provider-option{min-height:68px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;padding:12px 14px;border:1px solid #d9ded7;border-radius:8px;background:#fff;text-align:left;transition:border-color .15s,background .15s}
 .provider-option:hover{border-color:#9cae94}
 .provider-option.provider-active{border-color:#628746;background:#f5f8f2;box-shadow:0 0 0 1px #628746}
@@ -51,12 +51,18 @@
 .remote-fields{display:grid;grid-template-columns:1fr 1fr;align-items:end}
 .remote-token-field{grid-column:1/-1}
 .remote-provider-note{grid-column:1/-1}
+.settings-provider-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 24px;padding:4px;border:1px solid #e0e2da;border-radius:7px;background:#f0f2ed}
+.settings-provider-tabs button{min-width:0;padding:9px 6px;border:0;border-radius:4px;background:transparent;color:#747b70;font-size:10px;font-weight:600}
+.settings-provider-tabs button:hover{color:#3f493b}
+.settings-provider-tabs button.settings-tab-active{background:#fff;color:#283326;box-shadow:0 1px 3px #22282118}
+.settings-provider-panel{min-height:218px}
+.settings-provider-panel code{font:10px var(--mono);color:#596653}
 .simple-submit-row{padding-top:1px}
 .simple-generate-button{width:100%;min-height:48px;justify-content:center;border-radius:8px;background:#273326;font-size:14px}
 .simple-generate-button:hover{background:#374737}
 .generation-status{margin-top:0;padding-top:16px}
 .status-copy{font-size:12px}
-@media(max-width:620px){.landing.landing-simple{padding:30px 15px 40px}.simple-prompt-card{gap:19px;padding:18px 16px}.create-header{margin-bottom:17px}.create-header h1{font-size:28px}.create-header p{font-size:13px}.brief-input{min-height:135px;font-size:14px}.advanced-fields{grid-template-columns:1fr 1fr}.style-notes-field{grid-column:1/-1}.provider-fields-row{grid-template-columns:1fr 1fr}.model-refresh{grid-column:1/-1;width:max-content}.remote-fields{grid-template-columns:1fr}.remote-token-field,.remote-provider-note{grid-column:auto}}
+@media(max-width:620px){.landing.landing-simple{padding:30px 15px 40px}.simple-prompt-card{gap:19px;padding:18px 16px}.create-header{margin-bottom:17px}.create-header h1{font-size:28px}.create-header p{font-size:13px}.brief-input{min-height:135px;font-size:14px}.advanced-fields{grid-template-columns:1fr 1fr}.style-notes-field{grid-column:1/-1}.provider-options{grid-template-columns:1fr}.provider-fields-row{grid-template-columns:1fr 1fr}.model-refresh{grid-column:1/-1;width:max-content}.remote-fields{grid-template-columns:1fr}.remote-token-field,.remote-provider-note{grid-column:auto}.settings-provider-tabs{margin-bottom:20px}.settings-provider-tabs button{font-size:9px;padding-left:3px;padding-right:3px}}
 /* Keep the main topic field visually distinct from the old compact textarea style */
 .simple-prompt-card textarea.brief-input{height:auto;min-height:150px;margin:0;border:1px solid #d6dbd4;background:#fff;font-size:15px}
 .simple-prompt-card textarea.brief-input::placeholder{color:#989f96}

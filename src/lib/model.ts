@@ -116,7 +116,7 @@ export function defaultTheme(primary = '#b4f15e'): Presentation['theme'] {
   return { background:'#101214', surface:'#191d20', primary, secondary:'#8778ff', accent:'#70d6cc', textPrimary:'#f6f5ef', textSecondary:'#a6aba9', fontFamily:'Inter' };
 }
 
-export type ProviderKind = 'ollama' | 'openai-compatible';
+export type ProviderKind = 'ollama' | 'openai-compatible' | 'lm-studio';
 export type OidcIdentity = { idToken: string; subject: string; issuer: string };
 export type OAuthAccessCredential = { accessToken: string; expiresAt?: number };
 export type ManualAccessCredential = { accessToken: string };

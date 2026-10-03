@@ -44,6 +44,9 @@ async function request(url: string, init: RequestInit, kind: ProviderKind): Prom
       let body: { error?: string | { message?:string }; message?: string } = {};
       try { body = await response.json() as typeof body; } catch { /* provider error bodies vary */ }
       const message = (typeof body.error === 'string' ? body.error : body.error?.message) || body.message || '';
+      if (response.status === 400 && kind === 'lm-studio' && /no models loaded|load a model|developer page|lms load/i.test(message)) {
+        throw new Error("LM Studio has no model loaded. Load a model in LM Studio's Developer or Local Server page, then enter its exact identifier in the provider settings.");
+      }
       if (response.status === 400 && /(?:response_format|json_schema|structured output|format).*(?:not supported|unsupported|invalid)|(?:not support|unsupported|invalid).*(?:format|schema)/i.test(message)) throw new Error('STRUCTURED_OUTPUT_UNSUPPORTED');
       if (response.status === 401 || response.status === 403) throw new Error('Authentication failed. Check the access token for this API.');
       if (response.status === 404 && kind === 'ollama') throw new Error('Ollama endpoint or model was not found. Check the URL and model name.');
@@ -61,6 +64,14 @@ export async function listOllamaModels(baseUrl: string): Promise<string[]> {
   return (data.models ?? []).map(item => item.name).filter((name): name is string => Boolean(name));
 }
 
+export async function listLMStudioModels(baseUrl: string, accessToken = ''): Promise<string[]> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const response = await request(`${cleanBaseUrl(baseUrl)}/models`, { headers }, 'lm-studio');
+  const data = await response.json() as { data?: Array<{ id?: string }> };
+  return (data.data ?? []).map(item => item.id).filter((id): id is string => Boolean(id));
+}
+
 export interface AIProviderAdapter {
   readonly kind: string;
   generate(prompt: string, schema: object, settings: ProviderSettings): Promise<string>;
@@ -69,6 +80,7 @@ const providerAdapters = new Map<string, AIProviderAdapter>();
 export function registerAIProvider(adapter: AIProviderAdapter): void { providerAdapters.set(adapter.kind, adapter); }
 registerAIProvider({ kind:'ollama', generate:generateOllama });
 registerAIProvider({ kind:'openai-compatible', generate:generateOpenAICompatible });
+registerAIProvider({ kind:'lm-studio', generate:generateOpenAICompatible });
 
 export async function generate(requestData: GenerationRequest, settings: ProviderSettings): Promise<Presentation> {
   const count = requestData.slideIndex === undefined ? requestData.slides : 1;
@@ -137,6 +149,7 @@ async function generateOllama(prompt: string, schema: object, settings: Provider
 
 async function generateOpenAICompatible(prompt: string, schema: object, settings: ProviderSettings): Promise<string> {
   const baseUrl = cleanBaseUrl(settings.baseUrl);
+  const providerKind: ProviderKind = settings.kind === 'lm-studio' ? 'lm-studio' : 'openai-compatible';
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
   // The manually entered access token lives in memory only. OIDC ID tokens are deliberately not used here.
   const bearer = settings.authorizationSource === 'oidc' ? settings.oauthAccessToken : settings.manualAccessToken;
@@ -145,11 +158,11 @@ async function generateOpenAICompatible(prompt: string, schema: object, settings
     { role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: prompt }
   ], response_format: { type: 'json_schema', json_schema: { name: 'presentation', strict: false, schema } } };
   let response: Response;
-  try { response = await request(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, 'openai-compatible'); }
+  try { response = await request(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, providerKind); }
   catch (error) {
     if (!(error instanceof Error) || error.message !== 'STRUCTURED_OUTPUT_UNSUPPORTED') throw error;
     delete body.response_format;
-    response = await request(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, 'openai-compatible');
+    response = await request(`${baseUrl}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, providerKind);
   }
   let data: { choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }> };
   try { data = await response.json() as typeof data; }

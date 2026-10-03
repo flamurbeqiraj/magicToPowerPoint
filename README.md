@@ -8,7 +8,7 @@ A browser based presentation studio. Describe a talk, choose a slide count and v
 - **Vite 8** for fast local development and optimized builds.
 - **Zod 4** for validating untrusted model output and keeping the presentation model typed.
 - **SVG created from whitelisted elements** for crisp, scalable slides and a single render path for the editor, copy, and download actions.
-- **Browser `fetch` provider adapters** for Ollama and OpenAI-compatible chat endpoints; there is no required paid AI service or application server.
+- **Browser `fetch` provider adapters** for Ollama, LM Studio, and OpenAI-compatible chat endpoints; there is no required paid AI service or application server.
 
 The project uses Vite's current stable major and therefore needs Node.js 20.19+ or 22.12+.
 
@@ -50,6 +50,14 @@ Open the local URL printed by Vite. For a production bundle, run `npm run build`
 3. Leave the app's provider set to **Ollama · on this device**. The URL and model can be changed in the connection settings. Use the refresh button to discover installed models; the model field remains editable if discovery is unavailable.
 
 Ollama supports JSON Schema constrained output through the `/api/chat` `format` option. The app uses that when available, falls back to JSON mode, and validates the result itself. [Ollama structured-output documentation](https://ollama.com/blog/structured-outputs)
+
+## Use local LM Studio
+
+1. Install [LM Studio](https://lmstudio.ai/) and download a model from its Discover tab.
+2. Load the model, open the **Local Server** tab, and start the server. LM Studio's default API base URL is `http://localhost:1234/v1`.
+3. Choose **LM Studio** in the app. The app queries `/v1/models` and lets you select a loaded model; leave the API key blank unless authentication is enabled in LM Studio. Use **Find models** after loading or switching models.
+
+The app calls `{base URL}/chat/completions` using LM Studio's OpenAI-compatible API. The base URL should end in `/v1`, not `/chat/completions`. LM Studio must allow browser requests from the app's origin; enable its CORS option if needed.
 
 ## Configure a remote OpenAI-compatible API
 

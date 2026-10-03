@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import MiniSlide from './MiniSlide.svelte';
-  import { generate, listOllamaModels } from './lib/providers';
+  import { generate, listLMStudioModels, listOllamaModels } from './lib/providers';
   import { clone, SLIDE_HEIGHT, SLIDE_WIDTH, validatePresentation, type Presentation, type ProviderKind, type ProviderSettings, type Slide, type SlideElement, type TextElement, type OidcSettings } from './lib/model';
   import { downloadSlide, renderSlide, slideSvgBlob, slideSvgMarkup } from './lib/svg';
   import { ArrowLeft, Check, ChevronDown, ChevronRight, Copy, Download, GripVertical, Layers, LoaderCircle, Plus, Redo2, Settings2, Sparkles, Trash2, Undo2, X } from '@lucide/svelte';
@@ -9,6 +9,8 @@
   const STORAGE_KEY = 'studio.presentation.v1';
   const OLLAMA_DEFAULT: ProviderSettings = { kind:'ollama', baseUrl:'http://localhost:11434', model:'qwen3:8b', manualAccessToken:'', authorizationSource:'manual', temperature:0.72 };
   const REMOTE_DEFAULT: ProviderSettings = { kind:'openai-compatible', baseUrl:'https://api.openai.com/v1', model:'gpt-4o-mini', manualAccessToken:'', authorizationSource:'manual', temperature:0.72 };
+  const LM_STUDIO_DEFAULT: ProviderSettings = { kind:'lm-studio', baseUrl:'http://localhost:1234/v1', model:'local-model', manualAccessToken:'', authorizationSource:'manual', temperature:0.72 };
+  const PROVIDER_KINDS: ProviderKind[] = ['ollama', 'openai-compatible', 'lm-studio'];
   const DEFAULT_BRIEF = 'Create a modern presentation about how artificial intelligence is changing software development. Explain coding, testing, documentation and developer productivity. Use a sophisticated dark navy design with electric blue and violet accents.';
   const styleChoices = ['Modern / Professional', 'Editorial', 'Minimal', 'Bold & expressive', 'Playful', 'Futuristic'];
 
@@ -18,9 +20,10 @@
   let styleNotes = '';
   let primaryColor = '#8b7cff';
   let providerKind: ProviderKind = 'ollama';
-  let settingsByKind: Record<ProviderKind, ProviderSettings> = { ollama:clone(OLLAMA_DEFAULT), 'openai-compatible':clone(REMOTE_DEFAULT) };
+  let settingsByKind: Record<ProviderKind, ProviderSettings> = { ollama:clone(OLLAMA_DEFAULT), 'openai-compatible':clone(REMOTE_DEFAULT), 'lm-studio':clone(LM_STUDIO_DEFAULT) };
   let oidc: OidcSettings = { issuer:'', clientId:'', redirectUri:'', scopes:'openid profile email', enabled:false };
   let ollamaModels: string[] = [];
+  let lmStudioModels: string[] = [];
   let listingModels = false;
   let settingsOpen = false;
   let oidcSection = false;
@@ -60,7 +63,8 @@
     presentation, brief, slideCount, style, styleNotes, primaryColor, providerKind,
     providers:{
       ollama:{ baseUrl:persistableBaseUrl(settingsByKind.ollama.baseUrl), model:settingsByKind.ollama.model, temperature:settingsByKind.ollama.temperature },
-      'openai-compatible':{ baseUrl:persistableBaseUrl(settingsByKind['openai-compatible'].baseUrl), model:settingsByKind['openai-compatible'].model, temperature:settingsByKind['openai-compatible'].temperature }
+    'openai-compatible':{ baseUrl:persistableBaseUrl(settingsByKind['openai-compatible'].baseUrl), model:settingsByKind['openai-compatible'].model, temperature:settingsByKind['openai-compatible'].temperature },
+    'lm-studio':{ baseUrl:persistableBaseUrl(settingsByKind['lm-studio'].baseUrl), model:settingsByKind['lm-studio'].model, temperature:settingsByKind['lm-studio'].temperature }
     }, oidc
   }) : '';
   $: if (draftJson) scheduleDraftSave(draftJson);
@@ -97,7 +101,7 @@
         }
         brief = saved.brief === DEFAULT_BRIEF ? '' : saved.brief ?? ''; slideCount = saved.slideCount || 5; style = saved.style || style; styleNotes = saved.styleNotes || ''; primaryColor = saved.primaryColor || primaryColor;
         if (saved.providerKind) providerKind = saved.providerKind;
-        for (const kind of ['ollama','openai-compatible'] as ProviderKind[]) {
+        for (const kind of PROVIDER_KINDS) {
           const persisted = saved.providers?.[kind];
           if (persisted) settingsByKind[kind] = { ...settingsByKind[kind], ...persisted, manualAccessToken:'' };
         }
@@ -112,16 +116,25 @@
   }
 
   async function refreshModels(showMessage = true): Promise<void> {
-    if (providerKind !== 'ollama') { if (showMessage) announce('Model discovery is available for Ollama.'); return; }
+    if (providerKind !== 'ollama' && providerKind !== 'lm-studio') { if (showMessage) announce('Model discovery is available for Ollama and LM Studio.'); return; }
     listingModels = true;
     try {
-      ollamaModels = await listOllamaModels(settingsByKind.ollama.baseUrl);
-      if (ollamaModels.length) {
-        const selectedModel = settingsByKind.ollama.model;
-        if (!ollamaModels.includes(selectedModel)) settingsByKind.ollama.model = ollamaModels[0];
-        if (showMessage) announce(`Found ${ollamaModels.length} local model${ollamaModels.length === 1 ? '' : 's'}.`);
-      } else if (showMessage) announce('No Ollama models found. Pull a model, then refresh.');
-    } catch (error) { if (showMessage) announce(error instanceof Error ? error.message : 'Could not list Ollama models.'); }
+      if (providerKind === 'ollama') {
+        ollamaModels = await listOllamaModels(settingsByKind.ollama.baseUrl);
+        if (ollamaModels.length) {
+          const selectedModel = settingsByKind.ollama.model;
+          if (!ollamaModels.includes(selectedModel)) settingsByKind.ollama.model = ollamaModels[0];
+          if (showMessage) announce(`Found ${ollamaModels.length} local model${ollamaModels.length === 1 ? '' : 's'}.`);
+        } else if (showMessage) announce('No Ollama models found. Pull a model, then refresh.');
+      } else {
+        lmStudioModels = await listLMStudioModels(settingsByKind['lm-studio'].baseUrl, settingsByKind['lm-studio'].manualAccessToken);
+        if (lmStudioModels.length) {
+          const selectedModel = settingsByKind['lm-studio'].model;
+          if (!lmStudioModels.includes(selectedModel)) settingsByKind['lm-studio'].model = lmStudioModels[0];
+          if (showMessage) announce(`Found ${lmStudioModels.length} loaded LM Studio model${lmStudioModels.length === 1 ? '' : 's'}.`);
+        } else if (showMessage) announce('No LM Studio models are loaded. Load a model, then refresh.');
+      }
+    } catch (error) { if (showMessage) announce(error instanceof Error ? error.message : `Could not list ${providerKind === 'ollama' ? 'Ollama' : 'LM Studio'} models.`); }
     finally { listingModels = false; }
   }
 
@@ -382,7 +395,7 @@
     const cleanSvg = document.createElementNS('http://www.w3.org/2000/svg','svg'); renderSlide(cleanSvg, slide, presentation);
     downloadSlide(cleanSvg, `slide-${String(activeSlide+1).padStart(2,'0')}`);
   }
-  function selectProvider(kind: ProviderKind): void { providerKind = kind; if (kind === 'ollama') void refreshModels(false); }
+  function selectProvider(kind: ProviderKind): void { providerKind = kind; if (kind === 'ollama' || kind === 'lm-studio') void refreshModels(false); }
   function normalizeBaseUrl(kind: ProviderKind): void {
     const current = settingsByKind[kind].baseUrl.trim();
     try { const url = new URL(current); url.search = ''; url.hash = ''; url.username = ''; url.password = ''; settingsByKind[kind].baseUrl = url.toString().replace(/\/$/, ''); }
@@ -447,6 +460,10 @@
               <strong>Local Ollama</strong>
               <span>Runs on your computer</span>
             </button>
+            <button type="button" class="provider-option" class:provider-active={providerKind === 'lm-studio'} aria-pressed={providerKind === 'lm-studio'} onclick={() => selectProvider('lm-studio')}>
+              <strong>LM Studio</strong>
+              <span>Local model server</span>
+            </button>
             <button type="button" class="provider-option" class:provider-active={providerKind === 'openai-compatible'} aria-pressed={providerKind === 'openai-compatible'} onclick={() => selectProvider('openai-compatible')}>
               <strong>AI API token</strong>
               <span>Connect to a remote model</span>
@@ -476,6 +493,33 @@
               </button>
             </div>
             <p class="provider-note">Start Ollama on this computer and install a model before generating.</p>
+          </div>
+        {:else if providerKind === 'lm-studio'}
+          <div class="provider-fields">
+            <div class="provider-fields-row">
+              <label class="form-field" for="lm-studio-url">
+                <span class="form-label">LM Studio URL</span>
+                <input id="lm-studio-url" type="url" bind:value={settingsByKind['lm-studio'].baseUrl} onblur={() => normalizeBaseUrl('lm-studio')} placeholder="http://localhost:1234/v1"/>
+              </label>
+              <label class="form-field" for="lm-studio-model">
+                <span class="form-label">Loaded model</span>
+                {#if lmStudioModels.length}
+                  <select id="lm-studio-model" bind:value={settingsByKind['lm-studio'].model}>
+                    {#each lmStudioModels as model}<option value={model}>{model}</option>{/each}
+                  </select>
+                {:else}
+                  <input id="lm-studio-model" bind:value={settingsByKind['lm-studio'].model} placeholder="Load a model first"/>
+                {/if}
+              </label>
+              <button type="button" class="model-refresh" aria-label="Find loaded LM Studio models" onclick={() => refreshModels()} disabled={listingModels}>
+                {#if listingModels}<LoaderCircle size={15} class="spin"/>{:else}Find models{/if}
+              </button>
+            </div>
+            <label class="form-field remote-token-field" for="lm-studio-token">
+              <span class="form-label">API key <i>OPTIONAL</i></span>
+              <input id="lm-studio-token" type="password" autocomplete="new-password" bind:value={settingsByKind['lm-studio'].manualAccessToken} placeholder="Only if authentication is enabled"/>
+            </label>
+            <p class="provider-note remote-provider-note">Start LM Studio's local server, load a model, and use the model identifier shown by the server.</p>
           </div>
         {:else}
           <div class="provider-fields remote-fields">
@@ -590,15 +634,30 @@
   <div class="settings-backdrop" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) settingsOpen = false; }}>
     <div class="settings-sheet" role="dialog" aria-modal="true" aria-label="AI provider settings">
       <header class="settings-header"><div><span class="settings-kicker">CONNECTIONS</span><h2>Your AI providers.</h2><p>Choose where your presentation designer runs.</p></div><button class="settings-close" aria-label="Close settings" onclick={() => settingsOpen = false}><X size={19}/></button></header>
-      <div class="settings-section-label">LOCAL · ON YOUR DEVICE</div>
-      <label class="settings-field"><span>Ollama URL</span><input bind:value={settingsByKind.ollama.baseUrl} onblur={() => normalizeBaseUrl('ollama')} placeholder="http://localhost:11434"/></label>
-      <div class="settings-field"><span>Installed Ollama model</span><div class="model-select-row">{#if ollamaModels.length}<select bind:value={settingsByKind.ollama.model}>{#each ollamaModels as model}<option>{model}</option>{/each}</select>{:else}<input bind:value={settingsByKind.ollama.model} placeholder="qwen3:8b" list="ollama-models-settings"/><datalist id="ollama-models-settings">{#each ollamaModels as model}<option value={model}></option>{/each}</datalist>{/if}<button class="refresh-settings" onclick={() => refreshModels()} disabled={listingModels}>{#if listingModels}<LoaderCircle size={15} class="spin"/>{:else}Find models{/if}</button></div></div>
-      <div class="settings-rule"></div>
-      <div class="settings-section-label">REMOTE · OPENAI-COMPATIBLE</div>
-      <label class="settings-field"><span>API base URL</span><input bind:value={settingsByKind['openai-compatible'].baseUrl} onblur={() => normalizeBaseUrl('openai-compatible')} placeholder="https://api.openai.com/v1"/></label>
-      <label class="settings-field"><span>Model name</span><input bind:value={settingsByKind['openai-compatible'].model} placeholder="gpt-4o-mini"/></label>
-      <label class="settings-field"><span>Bearer / access token <i>OPTIONAL</i></span><input type="password" autocomplete="new-password" bind:value={settingsByKind['openai-compatible'].manualAccessToken} placeholder="Paste token for this session"/></label>
-      <p class="credential-note"><span class="lock-mark">◈</span> This token is held in memory and sent only to the API URL above. It is never saved with your presentation or to browser storage. Re-enter it after refreshing the page.</p>
+      <div class="settings-provider-tabs" role="tablist" aria-label="AI providers">
+        <button type="button" role="tab" aria-selected={providerKind === 'ollama'} class:settings-tab-active={providerKind === 'ollama'} onclick={() => selectProvider('ollama')}>Ollama</button>
+        <button type="button" role="tab" aria-selected={providerKind === 'lm-studio'} class:settings-tab-active={providerKind === 'lm-studio'} onclick={() => selectProvider('lm-studio')}>LM Studio</button>
+        <button type="button" role="tab" aria-selected={providerKind === 'openai-compatible'} class:settings-tab-active={providerKind === 'openai-compatible'} onclick={() => selectProvider('openai-compatible')}>API compatible</button>
+      </div>
+      <section class="settings-provider-panel" role="tabpanel">
+        {#if providerKind === 'ollama'}
+          <div class="settings-section-label">LOCAL · ON YOUR DEVICE</div>
+          <label class="settings-field"><span>Ollama URL</span><input bind:value={settingsByKind.ollama.baseUrl} onblur={() => normalizeBaseUrl('ollama')} placeholder="http://localhost:11434"/></label>
+          <div class="settings-field"><span>Installed Ollama model</span><div class="model-select-row">{#if ollamaModels.length}<select bind:value={settingsByKind.ollama.model}>{#each ollamaModels as model}<option>{model}</option>{/each}</select>{:else}<input bind:value={settingsByKind.ollama.model} placeholder="qwen3:8b" list="ollama-models-settings"/><datalist id="ollama-models-settings">{#each ollamaModels as model}<option value={model}></option>{/each}</datalist>{/if}<button class="refresh-settings" onclick={() => refreshModels()} disabled={listingModels}>{#if listingModels}<LoaderCircle size={15} class="spin"/>{:else}Find models{/if}</button></div></div>
+        {:else if providerKind === 'lm-studio'}
+          <div class="settings-section-label">LOCAL · LM STUDIO SERVER</div>
+          <label class="settings-field"><span>LM Studio base URL</span><input bind:value={settingsByKind['lm-studio'].baseUrl} onblur={() => normalizeBaseUrl('lm-studio')} placeholder="http://localhost:1234/v1"/></label>
+          <div class="settings-field"><span>Loaded model</span><div class="model-select-row">{#if lmStudioModels.length}<select bind:value={settingsByKind['lm-studio'].model}>{#each lmStudioModels as model}<option value={model}>{model}</option>{/each}</select>{:else}<input bind:value={settingsByKind['lm-studio'].model} placeholder="Load a model first"/>{/if}<button class="refresh-settings" onclick={() => refreshModels()} disabled={listingModels}>{#if listingModels}<LoaderCircle size={15} class="spin"/>{:else}Find models{/if}</button></div></div>
+          <label class="settings-field"><span>API key <i>OPTIONAL</i></span><input type="password" autocomplete="new-password" bind:value={settingsByKind['lm-studio'].manualAccessToken} placeholder="Only if authentication is enabled"/></label>
+          <p class="provider-note">Start LM Studio's local server and load a model before generating. The base URL should end in <code>/v1</code>.</p>
+        {:else}
+          <div class="settings-section-label">REMOTE · OPENAI-COMPATIBLE</div>
+          <label class="settings-field"><span>API base URL</span><input bind:value={settingsByKind['openai-compatible'].baseUrl} onblur={() => normalizeBaseUrl('openai-compatible')} placeholder="https://api.openai.com/v1"/></label>
+          <label class="settings-field"><span>Model name</span><input bind:value={settingsByKind['openai-compatible'].model} placeholder="gpt-4o-mini"/></label>
+          <label class="settings-field"><span>Bearer / access token <i>OPTIONAL</i></span><input type="password" autocomplete="new-password" bind:value={settingsByKind['openai-compatible'].manualAccessToken} placeholder="Paste token for this session"/></label>
+          <p class="credential-note"><span class="lock-mark">◈</span> This token is held in memory and sent only to the API URL above. It is never saved with your presentation or to browser storage. Re-enter it after refreshing the page.</p>
+        {/if}
+      </section>
       <div class="settings-rule"></div>
       <button class="oidc-toggle" onclick={() => oidcSection = !oidcSection}><div><span class="settings-section-label">ENTERPRISE IDENTITY</span><strong>OpenID Connect setup <span>ARCHITECTURE READY</span></strong></div><ChevronDown size={17} class={oidcSection ? 'rotate-chevron' : ''}/></button>
       {#if oidcSection}
